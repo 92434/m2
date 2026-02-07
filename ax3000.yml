@@ -1,0 +1,58 @@
+name: Official Debug Session
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: '调试会话持续时间（分钟）'
+        required: false
+        default: '15'
+      mode:
+        description: '调试模式'
+        required: false
+        default: 'interactive'
+        type: choice
+        options:
+          - 'interactive'
+          - 'detached'
+      setup_commands:
+        description: '调试前执行的初始化命令'
+        required: false
+        default: ''
+
+jobs:
+  debug:
+    name: 🐛 Official tmate Debug Session
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(github.event.inputs.duration) + 10 }}
+
+    steps:
+      - name: ⏱️ Set timezone
+        run: sudo timedatectl set-timezone "Asia/Shanghai"
+
+      - name: 📦 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Pre-debug Setup
+        if: github.event.inputs.setup_commands != ''
+        run: |
+          echo "📋 Executing pre-debug setup commands..."
+          ${{ github.event.inputs.setup_commands }}
+
+      - name: Setup Official Debug Session
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: ${{ fromJSON(github.event.inputs.duration) }}
+        with:
+          detached: ${{ github.event.inputs.mode == 'detached' }}
+          limit-access-to-actor: true
+
+      - name: 📊 Session Summary
+        if: always()
+        run: |
+          echo "===================================="
+          echo "🐛 DEBUG SESSION COMPLETED"
+          echo "===================================="
+          echo "Status: ${{ job.status }}"
+          echo "Duration: ${{ github.event.inputs.duration }} minutes"
+          echo "Mode: ${{ github.event.inputs.mode }}"
+          echo "Runner: ${{ runner.name }}"
+          echo "===================================="
