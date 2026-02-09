@@ -1,0 +1,131 @@
+name: Docker Image Export Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_name:
+        description: '要导出的镜像名称'
+        required: false
+        default: 'jiangrui1994/cloudsaver'
+      image_tag:
+        description: '镜像标签'
+        required: false
+        default: 'latest'
+      package_name:
+        description: '导出包名称'
+        required: false
+        default: 'cloudsaver-image'
+
+jobs:
+  export:
+    name: Export Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Setup
+        run: |
+          sudo timedatectl set-timezone "Asia/Shanghai"
+          sudo apt-get update
+
+      - name: Pull Image
+        run: |
+          FULL_IMAGE="${{ github.event.inputs.image_name }}:${{ github.event.inputs.image_tag }}"
+          echo "Pulling ${FULL_IMAGE}"
+          docker pull ${FULL_IMAGE}
+          docker images | grep "${{ github.event.inputs.image_name }}"
+
+      - name: Export Image
+        run: |
+          NAME="${{ github.event.inputs.image_name }}"
+          TAG="${{ github.event.inputs.image_tag }}"
+          PKG="${{ github.event.inputs.package_name }}"
+          TS=$(date +%Y%m%d-%H%M%S)
+          
+          # Clean name for filenames
+          CLEAN=$(echo "${NAME}" | sed 's/[\/:]/_/g')
+          
+          # Export and compress
+          TAR_FILE="${PKG}-${CLEAN}-${TAG}-${TS}.tar"
+          GZ_FILE="${TAR_FILE}.gz"
+          
+          echo "Exporting to ${TAR_FILE}"
+          docker save ${NAME}:${TAG} -o ${TAR_FILE}
+          gzip ${TAR_FILE}
+          
+          ls -lh ${GZ_FILE}
+          echo "Size: $(du -h ${GZ_FILE} | cut -f1)"
+
+      - name: Create Info File
+        run: |
+          NAME="${{ github.event.inputs.image_name }}"
+          TAG="${{ github.event.inputs.image_tag }}"
+          PKG="${{ github.event.inputs.package_name }}"
+          TS=$(date +%Y%m%d-%H%M%S)
+          CLEAN=$(echo "${NAME}" | sed 's/[\/:]/_/g')
+          GZ_FILE="${PKG}-${CLEAN}-${TAG}-${TS}.tar.gz"
+          
+          echo "Image: ${NAME}:${TAG}" > image-info.txt
+          echo "Exported: $(date)" >> image-info.txt
+          echo "File: ${GZ_FILE}" >> image-info.txt
+          echo "" >> image-info.txt
+          echo "Usage:" >> image-info.txt
+          echo "docker load -i ${GZ_FILE}" >> image-info.txt
+
+      - name: Create Package
+        run: |
+          NAME="${{ github.event.inputs.image_name }}"
+          TAG="${{ github.event.inputs.image_tag }}"
+          PKG="${{ github.event.inputs.package_name }}"
+          TS=$(date +%Y%m%d-%H%M%S)
+          CLEAN=$(echo "${NAME}" | sed 's/[\/:]/_/g')
+          
+          GZ_FILE="${PKG}-${CLEAN}-${TAG}-${TS}.tar.gz"
+          ZIP_FILE="${PKG}-package-${TS}.zip"
+          
+          mkdir contents
+          cp ${GZ_FILE} contents/
+          cp image-info.txt contents/
+          
+          echo "# Docker Image Package" > contents/README.md
+          echo "Image: ${NAME}:${TAG}" >> contents/README.md
+          echo "Load with: docker load -i ${GZ_FILE}" >> contents/README.md
+          
+          zip -r ${ZIP_FILE} contents/
+          ls -lh ${ZIP_FILE}
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-package
+          path: |
+            *.zip
+            *.tar.gz
+            image-info.txt
+          retention-days: 30
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: img-${{ github.run_number }}
+          name: "Docker Image Export - ${{ github.event.inputs.image_name }}:${{ github.event.inputs.image_tag }}"
+          body: |
+            Exported Docker image: ${{ github.event.inputs.image_name }}:${{ github.event.inputs.image_tag }}
+            
+            Contains:
+            - Compressed Docker image (.tar.gz)
+            - Usage instructions
+            
+            Load image with: docker load -i *.tar.gz
+          files: |
+            *.zip
+          draft: false
+          prerelease: false
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "Export completed!"
+          echo "Image: ${{ github.event.inputs.image_name }}:${{ github.event.inputs.image_tag }}"
+          echo "Release: https://github.com/${{ github.repository }}/releases"

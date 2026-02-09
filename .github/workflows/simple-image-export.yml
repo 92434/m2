@@ -1,0 +1,51 @@
+name: Simple Image Export
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: '镜像名称:tag'
+        required: false
+        default: 'jiangrui1994/cloudsaver:latest'
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Pull and Export Image
+        run: |
+          IMAGE="${{ github.event.inputs.image }}"
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          FILENAME="exported-image-${TIMESTAMP}"
+          
+          echo "📥 Pulling ${IMAGE}"
+          docker pull ${IMAGE}
+          
+          echo "📤 Exporting to ${FILENAME}.tar.gz"
+          docker save ${IMAGE} | gzip > ${FILENAME}.tar.gz
+          
+          ls -lh ${FILENAME}.tar.gz
+
+      - name: Upload Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-export
+          path: exported-image-*.tar.gz
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: export-${{ github.run_number }}
+          name: "📦 Image Export Package"
+          body: |
+            Exported Docker image: ${{ github.event.inputs.image }}
+            
+            Download the .tar.gz file and load with:
+            ```bash
+            docker load -i exported-image-*.tar.gz
+            ```
+          files: |
+            exported-image-*.tar.gz

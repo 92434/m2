@@ -22,6 +22,44 @@
 - 自动时间戳标记
 - 简洁的操作流程
 
+### 3. package-release.yml
+**ZIP包发布工作流**，将整个项目打包成ZIP并创建GitHub Release。
+
+**功能特性：**
+- 自动打包项目文件为ZIP格式
+- 创建带时间戳的版本号
+- 生成GitHub Release并附加ZIP文件
+- 提供30天的artifact保留期
+- 完整的发布说明和元数据
+
+### 4. quick-zip.yml
+**快速ZIP打包工作流**，简洁高效的打包方案。
+
+**功能特性：**
+- 快速创建项目ZIP包
+- 自动时间戳命名
+- 上传为GitHub Artifact
+- 可选创建Release
+
+### 5. image-export.yml ⭐ **新功能**
+**Docker镜像导出工作流**，将Docker镜像打包成压缩包供下载。
+
+**功能特性：**
+- 自动拉取指定的Docker镜像
+- 导出为.tar.gz格式
+- 创建完整的使用说明包
+- 生成GitHub Release
+- 包含镜像元数据信息
+
+### 6. simple-image-export.yml
+**简化版镜像导出**，快速导出镜像的核心功能。
+
+**功能特性：**
+- 最小化操作步骤
+- 快速导出和压缩
+- 直接上传artifact
+- 简洁的使用说明
+
 ## 使用方法
 
 ### 触发工作流
@@ -29,18 +67,16 @@
 1. 访问仓库的 **Actions** 页面
 2. 选择要运行的工作流
 3. 点击 **Run workflow** 按钮
-4. 根据需要配置参数：
-   - `source_image`: 源镜像地址（默认：jiangrui1994/cloudsaver:latest）
-   - `target_name`: 目标包名称（默认：cloudsaver）
-   - `image_tag`: 镜像标签（默认：latest）
+4. 根据需要配置参数
 
-### 参数说明
+### 镜像导出参数说明
 
 | 参数 | 描述 | 默认值 |
 |------|------|--------|
-| source_image | 要拉取的源镜像地址 | jiangrui1994/cloudsaver:latest |
-| target_name | 在GitHub Packages中的包名 | cloudsaver |
+| image_name | 要导出的镜像名称 | jiangrui1994/cloudsaver |
 | image_tag | 镜像标签 | latest |
+| package_name | 导出包名称 | cloudsaver-image |
+| image | 完整镜像标识(名称:标签) | jiangrui1994/cloudsaver:latest |
 
 ## 下载使用发布的镜像
 
@@ -57,10 +93,54 @@ docker pull ghcr.io/YOUR_USERNAME/cloudsaver:latest
 docker pull ghcr.io/YOUR_USERNAME/cloudsaver:20241219-143022
 ```
 
+## 下载导出的镜像包
+
+### 方法1：从GitHub Release下载
+1. 访问仓库的 **Releases** 页面
+2. 找到对应的image release
+3. 下载附加的ZIP或.tar.gz文件
+
+### 方法2：从Actions Artifacts下载
+1. 访问 **Actions** 页面
+2. 找到成功的workflow运行记录
+3. 在右上角找到 **Artifacts** 部分
+4. 下载对应的镜像包文件
+
+## 使用导出的镜像包
+
+### 加载镜像到本地Docker
+```bash
+# 方法1：直接加载压缩包
+docker load -i exported-image-20241219-153045.tar.gz
+
+# 方法2：先解压再加载
+gunzip exported-image-20241219-153045.tar.gz
+docker load -i exported-image-20241219-153045.tar
+
+# 验证镜像
+docker images | grep cloudsaver
+```
+
+### 完整包使用方法
+如果下载的是ZIP包：
+```bash
+# 解压完整包
+unzip cloudsaver-image-package.zip
+
+# 查看内容
+cd package_contents
+cat README.md
+cat image-info.txt
+
+# 加载镜像
+docker load -i *.tar.gz
+```
+
 ## 包访问地址
 
-发布成功后，可以在以下位置查看和管理你的包：
-- https://github.com/YOUR_USERNAME?tab=packages
+- **Docker镜像**: https://github.com/YOUR_USERNAME?tab=packages
+- **Release页面**: https://github.com/YOUR_USERNAME/REPO_NAME/releases
+- **Packages页面**: https://github.com/YOUR_USERNAME?tab=packages&repo_name=PACKAGE_NAME
 
 ## 注意事项
 
@@ -68,6 +148,8 @@ docker pull ghcr.io/YOUR_USERNAME/cloudsaver:20241219-143022
 2. GitHub Packages存储有容量限制
 3. 建议定期清理旧版本以节省空间
 4. 公开包任何人都可以下载，私有包需要认证
+5. ZIP包会自动排除.git等不需要的文件
+6. 镜像包可能较大，请确保有足够的下载带宽
 
 ## 故障排除
 
@@ -76,3 +158,5 @@ docker pull ghcr.io/YOUR_USERNAME/cloudsaver:20241219-143022
 2. 是否有足够的存储空间
 3. 网络连接是否正常
 4. 源镜像是否存在且可访问
+5. 权限设置是否正确
+6. Docker服务是否正常运行
