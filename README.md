@@ -50,7 +50,7 @@
 - 创建完整的使用说明包
 - 生成GitHub Release
 - 包含镜像元数据信息
-- **修复了时间戳一致性问题**
+- 简化的时间戳格式
 
 ### 6. simple-image-export.yml
 **简化版镜像导出**，快速导出镜像的核心功能。
@@ -60,7 +60,25 @@
 - 快速导出和压缩
 - 直接上传artifact
 - 简洁的使用说明
-- **修复了时间戳一致性问题**
+
+### 7. tar-export.yml ⭐ **新功能**
+**Tar格式镜像导出**，专门用于导出未压缩的tar格式镜像文件。
+
+**功能特性：**
+- 导出原始tar格式镜像文件
+- 不进行额外压缩
+- 包含详细的使用说明
+- 生成GitHub Release
+- 提供30天artifact保留期
+
+### 8. simple-tar.yml
+**简化版tar导出**，最基础的tar格式导出功能。
+
+**功能特性：**
+- 最简化的操作流程
+- 直接导出tar文件
+- 上传为artifact
+- 无额外包装
 
 ## 使用方法
 
@@ -79,6 +97,7 @@
 | image_tag | 镜像标签 | latest |
 | package_name | 导出包名称 | cloudsaver-image |
 | image | 完整镜像标识(名称:标签) | jiangrui1994/cloudsaver:latest |
+| filename | 输出文件名(不含扩展名) | cloudsaver-image |
 
 ## 下载使用发布的镜像
 
@@ -110,21 +129,26 @@ docker pull ghcr.io/YOUR_USERNAME/cloudsaver:20241219-143022
 
 ## 使用导出的镜像包
 
-### 加载镜像到本地Docker
+### Tar格式镜像使用方法
 ```bash
-# 方法1：直接加载压缩包
-docker load -i exported-image-20241219-153045.tar.gz
-
-# 方法2：先解压再加载
-gunzip exported-image-20241219-153045.tar.gz
-docker load -i exported-image-20241219-153045.tar
+# 加载tar格式镜像
+docker load -i cloudsaver-image-20241219.tar
 
 # 验证镜像
 docker images | grep cloudsaver
 ```
 
+### 压缩包格式使用方法
+```bash
+# 方法1：直接加载压缩包
+docker load -i exported-image-20241219.tar.gz
+
+# 方法2：先解压再加载
+gunzip exported-image-20241219.tar.gz
+docker load -i exported-image-20241219.tar
+```
+
 ### 完整包使用方法
-如果下载的是ZIP包：
 ```bash
 # 解压完整包
 unzip cloudsaver-image-package.zip

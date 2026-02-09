@@ -1,0 +1,92 @@
+name: Tar Image Export
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: '镜像名称:tag'
+        required: false
+        default: 'jiangrui1994/cloudsaver:latest'
+      filename:
+        description: '输出文件名(不含扩展名)'
+        required: false
+        default: 'cloudsaver-image'
+
+jobs:
+  export:
+    name: Export to Tar
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Export Docker Image to Tar
+        run: |
+          IMAGE="${{ github.event.inputs.image }}"
+          FILENAME="${{ github.event.inputs.filename }}"
+          DATE=$(date +%Y%m%d)
+          
+          echo "📦 Exporting ${IMAGE} to tar format"
+          
+          # 拉取镜像
+          docker pull ${IMAGE}
+          
+          # 导出为tar文件
+          TAR_FILE="${FILENAME}-${DATE}.tar"
+          echo "Creating ${TAR_FILE}"
+          docker save ${IMAGE} -o ${TAR_FILE}
+          
+          # 显示文件信息
+          ls -lh ${TAR_FILE}
+          echo "Size: $(du -h ${TAR_FILE} | cut -f1)"
+          
+          # 创建基本信息文件
+          echo "Docker Image Export Info" > info.txt
+          echo "========================" >> info.txt
+          echo "Image: ${IMAGE}" >> info.txt
+          echo "File: ${TAR_FILE}" >> info.txt
+          echo "Date: $(date)" >> info.txt
+          echo "Size: $(du -h ${TAR_FILE} | cut -f1)" >> info.txt
+          echo "" >> info.txt
+          echo "Usage:" >> info.txt
+          echo "docker load -i ${TAR_FILE}" >> info.txt
+          
+          ls -la
+
+      - name: Upload Tar File
+        uses: actions/upload-artifact@v4
+        with:
+          name: tar-image-export
+          path: |
+            *.tar
+            info.txt
+          retention-days: 30
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: tar-${{ github.run_number }}
+          name: "📦 Tar Image Export - ${{ github.event.inputs.image }}"
+          body: |
+            ## Docker Image Tar Export
+            
+            Exported image: `${{ github.event.inputs.image }}`
+            
+            ### Files Included
+            - `${{ github.event.inputs.filename }}-*.tar` - Docker image tar file
+            - `info.txt` - Export information and usage instructions
+            
+            ### Usage Instructions
+            ```bash
+            # Load the image
+            docker load -i ${{ github.event.inputs.filename }}-*.tar
+            
+            # Verify the image
+            docker images | grep cloudsaver
+            ```
+            
+            Export completed on: $(date)
+          files: |
+            *.tar
+          draft: false
+          prerelease: false

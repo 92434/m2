@@ -1,0 +1,30 @@
+name: Simple Tar Export
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: '镜像名称:tag'
+        required: false
+        default: 'jiangrui1994/cloudsaver:latest'
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Export to Tar
+        run: |
+          IMAGE="${{ github.event.inputs.image }}"
+          DATE=$(date +%Y%m%d)
+          
+          echo "Exporting ${IMAGE}"
+          docker pull ${IMAGE}
+          docker save ${IMAGE} -o image-${DATE}.tar
+          ls -lh image-${DATE}.tar
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: simple-tar
+          path: image-*.tar
