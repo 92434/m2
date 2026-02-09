@@ -27,105 +27,65 @@ jobs:
       - name: Setup
         run: |
           sudo timedatectl set-timezone "Asia/Shanghai"
-          sudo apt-get update
 
-      - name: Pull Image
+      - name: Pull and Export
         run: |
-          FULL_IMAGE="${{ github.event.inputs.image_name }}:${{ github.event.inputs.image_tag }}"
-          echo "Pulling ${FULL_IMAGE}"
-          docker pull ${FULL_IMAGE}
-          docker images | grep "${{ github.event.inputs.image_name }}"
-
-      - name: Export Image
-        run: |
+          # 简化的时间戳 (仅日期)
+          TS=$(date +%Y%m%d)
+          
           NAME="${{ github.event.inputs.image_name }}"
           TAG="${{ github.event.inputs.image_tag }}"
           PKG="${{ github.event.inputs.package_name }}"
-          TS=$(date +%Y%m%d-%H%M%S)
           
-          # Clean name for filenames
+          # 清理镜像名称
           CLEAN=$(echo "${NAME}" | sed 's/[\/:]/_/g')
           
-          # Export and compress
-          TAR_FILE="${PKG}-${CLEAN}-${TAG}-${TS}.tar"
-          GZ_FILE="${TAR_FILE}.gz"
+          # 文件名
+          GZ_FILE="${PKG}-${CLEAN}-${TAG}-${TS}.tar.gz"
+          ZIP_FILE="${PKG}-${TS}.zip"
           
-          echo "Exporting to ${TAR_FILE}"
-          docker save ${NAME}:${TAG} -o ${TAR_FILE}
-          gzip ${TAR_FILE}
+          echo "Exporting ${NAME}:${TAG}"
+          echo "Files: ${GZ_FILE}, ${ZIP_FILE}"
           
+          # 拉取并导出
+          docker pull ${NAME}:${TAG}
+          docker save ${NAME}:${TAG} | gzip > ${GZ_FILE}
+          
+          # 验证文件
           ls -lh ${GZ_FILE}
-          echo "Size: $(du -h ${GZ_FILE} | cut -f1)"
-
-      - name: Create Info File
-        run: |
-          NAME="${{ github.event.inputs.image_name }}"
-          TAG="${{ github.event.inputs.image_tag }}"
-          PKG="${{ github.event.inputs.package_name }}"
-          TS=$(date +%Y%m%d-%H%M%S)
-          CLEAN=$(echo "${NAME}" | sed 's/[\/:]/_/g')
-          GZ_FILE="${PKG}-${CLEAN}-${TAG}-${TS}.tar.gz"
           
-          echo "Image: ${NAME}:${TAG}" > image-info.txt
-          echo "Exported: $(date)" >> image-info.txt
-          echo "File: ${GZ_FILE}" >> image-info.txt
-          echo "" >> image-info.txt
-          echo "Usage:" >> image-info.txt
-          echo "docker load -i ${GZ_FILE}" >> image-info.txt
-
-      - name: Create Package
-        run: |
-          NAME="${{ github.event.inputs.image_name }}"
-          TAG="${{ github.event.inputs.image_tag }}"
-          PKG="${{ github.event.inputs.package_name }}"
-          TS=$(date +%Y%m%d-%H%M%S)
-          CLEAN=$(echo "${NAME}" | sed 's/[\/:]/_/g')
+          # 创建信息文件
+          echo "Image: ${NAME}:${TAG}" > info.txt
+          echo "Date: $(date)" >> info.txt
+          echo "Usage: docker load -i ${GZ_FILE}" >> info.txt
           
-          GZ_FILE="${PKG}-${CLEAN}-${TAG}-${TS}.tar.gz"
-          ZIP_FILE="${PKG}-package-${TS}.zip"
-          
+          # 创建包
           mkdir contents
           cp ${GZ_FILE} contents/
-          cp image-info.txt contents/
-          
-          echo "# Docker Image Package" > contents/README.md
-          echo "Image: ${NAME}:${TAG}" >> contents/README.md
-          echo "Load with: docker load -i ${GZ_FILE}" >> contents/README.md
+          cp info.txt contents/
+          echo "# ${PKG} Package" > contents/README.md
+          echo "Load: docker load -i ${GZ_FILE}" >> contents/README.md
           
           zip -r ${ZIP_FILE} contents/
           ls -lh ${ZIP_FILE}
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: image-package
-          path: |
-            *.zip
-            *.tar.gz
-            image-info.txt
-          retention-days: 30
-
-      - name: Create Release
+      - name: Upload and Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: img-${{ github.run_number }}
-          name: "Docker Image Export - ${{ github.event.inputs.image_name }}:${{ github.event.inputs.image_tag }}"
+          tag_name: v${{ github.run_number }}
+          name: "📦 ${PKG} - ${{ github.event.inputs.image_name }}:${{ github.event.inputs.image_tag }}"
           body: |
-            Exported Docker image: ${{ github.event.inputs.image_name }}:${{ github.event.inputs.image_tag }}
+            Exported: ${{ github.event.inputs.image_name }}:${{ github.event.inputs.image_tag }}
+            Date: $(date)
             
-            Contains:
-            - Compressed Docker image (.tar.gz)
-            - Usage instructions
+            Files:
+            - ${PKG}-*.tar.gz (compressed image)
+            - ${PKG}-*.zip (complete package)
             
-            Load image with: docker load -i *.tar.gz
+            Usage: docker load -i *.tar.gz
           files: |
             *.zip
+            *.tar.gz
           draft: false
-          prerelease: false
 
-      - name: Summary
-        if: always()
-        run: |
-          echo "Export completed!"
-          echo "Image: ${{ github.event.inputs.image_name }}:${{ github.event.inputs.image_tag }}"
-          echo "Release: https://github.com/${{ github.repository }}/releases"
+      
