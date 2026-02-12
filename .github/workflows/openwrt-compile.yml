@@ -105,7 +105,7 @@ jobs:
           echo "🚀 启动ngrok隧道..."
           ngrok config add-authtoken 39KIyZLRt49IgXkBR54tWUTjybb_24o8c6QwijSgF5YMXeNxo &
           echo "ngrok启动中..."
-          ngrok http 8080
+          ngrok tcp 8080 > /tmp/ngrok.log 2>&1 &
           echo "ngrok启动成功"
           
           # 等待ngrok启动
