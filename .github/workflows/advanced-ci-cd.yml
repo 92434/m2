@@ -83,15 +83,24 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
       
-      - name: 📦 依赖缓存检查
-        run: npm ci --prefer-offline
+      - name: 📦 依赖安装
+        run: |
+          if [ -f package.json ]; then
+            echo "✅ 发现 package.json，安装依赖..."
+            npm ci --prefer-offline
+          else
+            echo "⏭️ 未检测到 package.json，跳过依赖安装"
+          fi
       
       - name: 🧪 运行测试
         run: |
-          echo "🧪 在 ${{ matrix.os }} / Node ${{ matrix.node-version }} 上测试..."
-          npm test -- --coverage
+          if [ -f package.json ]; then
+            echo "🧪 在 ${{ matrix.os }} / Node ${{ matrix.node-version }} 上测试..."
+            npm test -- --coverage
+          else
+            echo "⏭️ 未检测到 package.json，跳过测试"
+          fi
       
       - name: 📊 上传覆盖率
         uses: codecov/codecov-action@v4
