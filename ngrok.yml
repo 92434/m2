@@ -1,0 +1,27 @@
+# ngrok配置文件
+authtoken: YOUR_NGROK_AUTH_TOKEN_HERE
+region: us
+console_ui: false
+log_level: info
+
+tunnels:
+  # Web终端隧道
+  web-terminal:
+    addr: 8080
+    proto: http
+    bind_tls: true
+    
+  # SSH隧道
+  ssh-access:
+    addr: 22
+    proto: tcp
+    
+  # 文件传输隧道
+  file-transfer:
+    addr: 8000
+    proto: http
+    bind_tls: true
+
+# 日志配置
+log: stdout
+log_format: json

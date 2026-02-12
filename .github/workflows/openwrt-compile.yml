@@ -216,21 +216,53 @@ jobs:
           
           echo "✅ 配置生成和验证完成"
       
-      - name: 🔧 安装调试工具
+      - name: 🔧 安装调试工具和ngrok
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y vim nano htop
-          echo "✅ 调试工具安装完成"
+          sudo apt-get install -y vim nano htop curl wget jq
+          
+          # 安装ngrok
+          echo "📥 安装ngrok..."
+          wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
+          tar -xzf ngrok-v3-stable-linux-amd64.tgz
+          chmod +x ngrok
+          sudo mv ngrok /usr/local/bin/
+          
+          echo "✅ 调试工具和ngrok安装完成"
       
-      - name: 🌐 启动 tmate 远程会话
-        uses: mxschmitt/action-tmate@v3
-        timeout-minutes: 60
-        with:
-          detached: false
-          limit-access-to-actor: false
-        env:
-          OPENWRT_ROOT: ${{ env.OPENWRT_ROOT }}
-      
+      - name: 🌐 启动ngrok反向代理
+        run: |
+          cd ${{ env.OPENWRT_ROOT }}
+          
+          # 启动SSH服务
+          sudo systemctl start ssh
+          sudo systemctl enable ssh
+          
+          # 启动ngrok HTTP隧道到Web终端
+          echo "🚀 启动ngrok隧道..."
+          ngrok http 8080 > /tmp/ngrok.log 2>&1 &
+          
+          # 等待ngrok启动
+          sleep 5
+          
+          # 获取公共URL
+          NGROK_URL=$(curl -s localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')
+          
+          echo "========================================"
+          echo "🌐 ngrok远程访问已启动"
+          echo "Web终端地址: $NGROK_URL"
+          echo "SSH连接: ssh runner@$(curl -s ifconfig.me)"
+          echo "========================================"
+          
+          # 启动Web终端
+          echo "🖥️ 启动Web终端..."
+          sudo apt-get install -y ttyd
+          ttyd -p 8080 bash &
+          
+          # 保持会话活跃
+          echo "⏳ 等待远程调试... (60分钟超时)"
+          sleep 3600  # 等待1小时
+          
       - name: 📋 验证配置
         run: |
           cd ${{ env.OPENWRT_ROOT }}

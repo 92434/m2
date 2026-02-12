@@ -2,6 +2,70 @@
 
 这是一个用于将Docker镜像从任意仓库传输到GitHub Container Registry(GHCR)的自动化工具。
 
+## 🌐 远程访问方案（ngrok）
+
+### 为什么选择ngrok？
+
+相比传统方案，ngrok提供：
+- 更稳定的连接体验
+- 支持多种协议（HTTP/TCP/WebSocket）
+- 可自定义域名和认证
+- 更好的性能和可靠性
+
+### 使用方法
+
+1. **快速启动**（推荐）：
+```bash
+chmod +x quick-ngrok.sh
+./quick-ngrok.sh
+```
+
+2. **完整功能版**：
+```bash
+chmod +x ngrok-remote-access.sh
+./ngrok-remote-access.sh
+```
+
+3. **手动配置**：
+```bash
+# 安装ngrok
+wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
+tar -xzf ngrok-v3-stable-linux-amd64.tgz
+sudo mv ngrok /usr/local/bin/
+
+# 启动服务
+ttyd -p 8080 bash &  # Web终端
+ngrok http 8080 &    # ngrok隧道
+```
+
+### 访问方式
+
+启动后会显示：
+- **Web终端**: 通过浏览器访问提供的HTTPS地址
+- **SSH连接**: `ssh runner@[显示的IP地址]`
+- **文件传输**: HTTP文件服务器
+
+### 配置文件
+
+`ngrok.yml` 支持：
+```yaml
+authtoken: YOUR_TOKEN
+tunnels:
+  web-terminal:
+    addr: 8080
+    proto: http
+  ssh-access:
+    addr: 22
+    proto: tcp
+```
+
+## 🔒 安全提醒
+
+- ngrok免费版有连接限制
+- 建议使用认证token提高安全性
+- 及时关闭不需要的远程访问
+- 敏感操作完成后立即终止会话
+
 ## 🏗️ 架构设计
 
 ### 工作流分割策略："一分二，二分四"
@@ -80,11 +144,15 @@
 1. **权限不足** - 检查GITHUB_TOKEN权限设置
 2. **镜像拉取失败** - 确认源镜像是公开的或有访问权限
 3. **推送失败** - 验证GitHub Packages存储空间
+4. **ngrok连接失败**: 检查防火墙设置和token有效性
+5. **Web终端无法访问**: 确认ttyd服务正常运行
+6. **SSH连接被拒绝**: 检查SSH服务状态
 
 ### 调试建议
 - 查看每个工作流的详细日志
 - 检查依赖关系是否正确配置
 - 验证环境变量和参数传递
+- 对于远程访问问题，检查ngrok服务状态和网络配置
 
 ## 📝 注意事项
 
