@@ -1,0 +1,26 @@
+name: 认证工作流 - Docker注册表登录
+
+on:
+  repository_dispatch:
+    types: [auth-workflow]
+
+jobs:
+  authenticate:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    
+    steps:
+      - name: 登录GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        
+        # 验证登录成功
+      - name: 验证认证状态
+        run: |
+          echo "✅ 成功登录到 ghcr.io"
+          echo "用户: ${{ github.actor }}"
+          echo "仓库所有者: ${{ github.repository_owner }}"

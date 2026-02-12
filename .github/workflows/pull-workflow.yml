@@ -1,0 +1,21 @@
+name: 拉取工作流 - 镜像获取
+
+on:
+  repository_dispatch:
+    types: [pull-workflow]
+
+jobs:
+  pull-image:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 拉取源镜像
+        run: |
+          SOURCE_IMAGE="${{ github.event.client_payload.source_image }}"
+          echo "📥 正在拉取镜像: $SOURCE_IMAGE"
+          docker pull "$SOURCE_IMAGE"
+          
+      - name: 验证镜像存在
+        run: |
+          SOURCE_IMAGE="${{ github.event.client_payload.source_image }}"
+          docker images "$SOURCE_IMAGE" --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}"

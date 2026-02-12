@@ -1,0 +1,112 @@
+name: 完整协调工作流 - 一分二二分四
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_image:
+        description: '源镜像地址'
+        required: false
+        default: 'jiangrui1994/cloudsaver:latest'
+      target_name:
+        description: '目标包名称'
+        required: false
+        default: 'cloudsaver'
+
+jobs:
+  # 第一层：主协调器（1个）
+  main-coordinator:
+    runs-on: ubuntu-latest
+    outputs:
+      payload: ${{ steps.prepare-payload.outputs.payload }}
+    steps:
+      - name: 准备传递数据
+        id: prepare-payload
+        run: |
+          PAYLOAD_JSON="{\"source_image\":\"${{ github.event.inputs.source_image }}\",\"target_name\":\"${{ github.event.inputs.target_name }}\"}"
+          echo "payload=$PAYLOAD_JSON" >> $GITHUB_OUTPUT
+          echo "准备的数据: $PAYLOAD_JSON"
+
+  # 第二层：两个并行处理流程（2个）
+  auth-and-pull:
+    needs: main-coordinator
+    runs-on: ubuntu-latest
+    steps:
+      - name: 执行认证和拉取
+        run: |
+          echo "🔐 执行认证和拉取流程"
+          echo "数据: ${{ needs.main-coordinator.outputs.payload }}"
+
+  tag-and-push:
+    needs: main-coordinator
+    runs-on: ubuntu-latest
+    steps:
+      - name: 执行标记和推送
+        run: |
+          echo "🏷️ 执行标记和推送流程"
+          echo "数据: ${{ needs.main-coordinator.outputs.payload }}"
+
+  # 第三层：四个具体操作（4个）
+  authentication:
+    needs: auth-and-pull
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Docker注册表认证
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+  image-pulling:
+    needs: auth-and-pull
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取源镜像
+        run: |
+          SOURCE_IMAGE="${{ fromJson(needs.main-coordinator.outputs.payload).source_image }}"
+          echo "📥 拉取镜像: $SOURCE_IMAGE"
+          docker pull "$SOURCE_IMAGE"
+
+  image-tagging:
+    needs: tag-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: 重新标记镜像
+        run: |
+          SOURCE_IMAGE="${{ fromJson(needs.main-coordinator.outputs.payload).source_image }}"
+          TARGET_NAME="${{ fromJson(needs.main-coordinator.outputs.payload).target_name }}"
+          TARGET_BASE="ghcr.io/${{ github.repository_owner }}/$TARGET_NAME"
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          
+          echo "🏷️ 标记镜像"
+          docker tag "$SOURCE_IMAGE" "${TARGET_BASE}:latest"
+          docker tag "$SOURCE_IMAGE" "${TARGET_BASE}:${TIMESTAMP}"
+
+  image-pushing:
+    needs: [tag-and-push, authentication]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: 推送镜像到GHCR
+        run: |
+          TARGET_NAME="${{ fromJson(needs.main-coordinator.outputs.payload).target_name }}"
+          TARGET_BASE="ghcr.io/${{ github.repository_owner }}/$TARGET_NAME"
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          
+          echo "🚀 推送镜像"
+          docker push "${TARGET_BASE}:latest"
+          docker push "${TARGET_BASE}:${TIMESTAMP}"
+
+  # 最终总结
+  final-summary:
+    needs: [authentication, image-pulling, image-tagging, image-pushing]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 工作流完成总结
+        run: |
+          echo "🎉 镜像传输工作流完成!"
+          echo "✅ 所有步骤已成功执行"
+          echo "🔗 访问地址: https://github.com/${{ github.repository_owner }}?tab=packages"

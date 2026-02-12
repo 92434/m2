@@ -1,0 +1,34 @@
+name: 标记工作流 - 镜像重标记
+
+on:
+  repository_dispatch:
+    types: [tag-workflow]
+
+jobs:
+  tag-image:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 创建目标标签
+        run: |
+          SOURCE_IMAGE="${{ github.event.client_payload.source_image }}"
+          TARGET_NAME="${{ github.event.client_payload.target_name }}"
+          TARGET_BASE="ghcr.io/${{ github.repository_owner }}/$TARGET_NAME"
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          
+          echo "🏷️ 创建标签:"
+          echo "  源镜像: $SOURCE_IMAGE"
+          echo "  目标基础: $TARGET_BASE"
+          echo "  时间戳: $TIMESTAMP"
+          
+          # 标记为latest
+          docker tag "$SOURCE_IMAGE" "${TARGET_BASE}:latest"
+          
+          # 标记为带时间戳的版本
+          docker tag "$SOURCE_IMAGE" "${TARGET_BASE}:${TIMESTAMP}"
+          
+      - name: 验证标签创建
+        run: |
+          TARGET_NAME="${{ github.event.client_payload.target_name }}"
+          TARGET_BASE="ghcr.io/${{ github.repository_owner }}/$TARGET_NAME"
+          docker images "$TARGET_BASE" --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}"
