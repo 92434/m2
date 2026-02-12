@@ -103,7 +103,7 @@ jobs:
           ttyd -p 8080 bash &
           # 启动ngrok HTTP隧道到Web终端
           echo "🚀 启动ngrok隧道..."
-          ngrok config add-authtoken 39KIyZLRt49IgXkBR54tWUTjybb_24o8c6QwijSgF5YMXeNxo
+          ngrok config add-authtoken 39KIyZLRt49IgXkBR54tWUTjybb_24o8c6QwijSgF5YMXeNxo &
           ngrok http 8080
           
           # 等待ngrok启动
