@@ -60,9 +60,15 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
   image-pulling:
-    needs: auth-and-pull
+    needs: [auth-and-pull, authentication]
     runs-on: ubuntu-latest
     steps:
+      - name: Docker注册表认证
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: 拉取源镜像
         run: |
           SOURCE_IMAGE="${{ fromJson(needs.main-coordinator.outputs.payload).source_image }}"
@@ -70,9 +76,17 @@ jobs:
           docker pull "$SOURCE_IMAGE"
 
   image-tagging:
-    needs: tag-and-push
+    needs: [tag-and-push, authentication]
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
     steps:
+      - name: Docker注册表认证
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: 重新标记镜像
         run: |
           SOURCE_IMAGE="${{ fromJson(needs.main-coordinator.outputs.payload).source_image }}"
@@ -85,11 +99,18 @@ jobs:
           docker tag "$SOURCE_IMAGE" "${TARGET_BASE}:${TIMESTAMP}"
 
   image-pushing:
-    needs: [tag-and-push, authentication]
+    needs: [image-tagging, authentication]
     runs-on: ubuntu-latest
     permissions:
       packages: write
     steps:
+      - name: Docker注册表认证
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
       - name: 推送镜像到GHCR
         run: |
           TARGET_NAME="${{ fromJson(needs.main-coordinator.outputs.payload).target_name }}"

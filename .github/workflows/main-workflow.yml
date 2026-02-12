@@ -29,3 +29,19 @@ jobs:
           repository: ${{ github.repository }}
           event-type: auth-workflow
           client-payload: '{"source_image": "${{ github.event.inputs.source_image }}", "target_name": "${{ github.event.inputs.target_name }}"}'
+      
+      - name: 触发拉取工作流
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          event-type: pull-workflow
+          client-payload: '{"source_image": "${{ github.event.inputs.source_image }}", "target_name": "${{ github.event.inputs.target_name }}"}'
+      
+      - name: 触发推送工作流
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          event-type: push-workflow
+          client-payload: '{"source_image": "${{ github.event.inputs.source_image }}", "target_name": "${{ github.event.inputs.target_name }}"}'  
