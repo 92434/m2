@@ -1,5 +1,5 @@
 # ngrok配置文件
-authtoken: YOUR_NGROK_AUTH_TOKEN_HERE
+authtoken: 39KIyZLRt49IgXkBR54tWUTjybb_24o8c6QwijSgF5YMXeNxo
 region: us
 console_ui: false
 log_level: info
