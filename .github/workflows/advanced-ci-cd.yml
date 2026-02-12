@@ -259,9 +259,6 @@ jobs:
     needs: decide-deploy
     if: needs.decide-deploy.outputs.should-deploy == 'true' && needs.decide-deploy.outputs.deploy-env == 'production'
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: https://app.example.com
     
     steps:
       - uses: actions/checkout@v4
@@ -283,9 +280,6 @@ jobs:
     needs: decide-deploy
     if: needs.decide-deploy.outputs.should-deploy == 'true' && needs.decide-deploy.outputs.deploy-env == 'staging'
     runs-on: ubuntu-latest
-    environment:
-      name: staging
-      url: https://staging.example.com
     
     steps:
       - uses: actions/checkout@v4
@@ -294,97 +288,3 @@ jobs:
         run: |
           echo "🧪 部署到测试环境..."
           echo "✅ 测试环境部署完成"
-
-  # ============ 第八阶段：发布版本 ============
-  create-release:
-    needs: deploy-production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: 📦 解析版本号
-        id: version
-        run: |
-          VERSION=$(grep '"version"' package.json | head -1 | awk -F: '{ print $2 }' | sed 's/[",\s]//g')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "📌 版本号: $VERSION"
-      
-      - name: 🎉 创建 GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: Release v${{ steps.version.outputs.version }}
-          body: |
-            ## 📝 更新日志
-            - 🚀 新功能
-            - 🐛 Bug 修复
-            - ⚡ 性能优化
-            - 📚 文档更新
-          draft: false
-          prerelease: false
-
-  # ============ 最后阶段：总体报告 ============
-  workflow-summary:
-    needs: [code-quality, matrix-build, build-docker, performance-test, dependency-audit, decide-deploy]
-    if: always()
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: 📊 工作流总体报告
-        run: |
-          cat > workflow-summary.md << 'EOF'
-          # 🎉 CI/CD 工作流完成报告
-          
-          ## 📈 执行统计
-          - 总任务数: 8
-          - 成功任务: 8
-          - 失败任务: 0
-          - 执行时间: ~15分钟
-          
-          ## ✅ 阶段完成情况
-          - [x] 代码质量分析 (质量评分: ${{ needs.code-quality.outputs.quality-score }}/100)
-          - [x] 矩阵构建 (3个OS × 2个Node版本)
-          - [x] Docker 镜像构建 (多架构)
-          - [x] 性能测试 (所有指标达标)
-          - [x] 依赖审计 (无高危漏洞)
-          - [x] 智能部署决策
-          - [x] ${{ needs.decide-deploy.outputs.deploy-env }} 环境部署
-          - [x] 发布版本管理
-          
-          ## 🔒 安全指标
-          - 安全问题: ${{ needs.code-quality.outputs.security-issues }}
-          - 代码覆盖率: 87%
-          - 依赖漏洞: 0个高危
-          
-          ## 🚀 部署状态
-          - 部署环境: ${{ needs.decide-deploy.outputs.deploy-env }}
-          - 镜像仓库: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          - 监控链接: https://monitoring.example.com
-          
-          ---
-          ⏱️ 完成时间: $(date)
-          📦 工作流版本: v2.0 (企业级 CI/CD)
-          EOF
-          
-          cat workflow-summary.md
-      
-      - name: 📤 上传最终报告
-        uses: actions/upload-artifact@v4
-        with:
-          name: workflow-summary
-          path: workflow-summary.md
-      
-      - name: 💬 输出最终统计
-        run: |
-          echo "╔════════════════════════════════════╗"
-          echo "║   🎊 CI/CD 工作流执行完毕 🎊       ║"
-          echo "╠════════════════════════════════════╣"
-          echo "║ ✅ 所有检查都已通过                ║"
-          echo "║ 🚀 已部署到 ${{ needs.decide-deploy.outputs.deploy-env }} ║"
-          echo "║ 📦 镜像已推送到 Registry          ║"
-          echo "║ 📊 所有报告已生成                ║"
-          echo "╚════════════════════════════════════╝"

@@ -1,0 +1,547 @@
+name: 🔨 OpenWrt 编译工作流
+
+on:
+  workflow_dispatch:
+    inputs:
+      openwrt_repo:
+        description: 'OpenWrt 仓库地址'
+        required: false
+        default: 'https://github.com/openwrt/openwrt.git'
+      openwrt_branch:
+        description: 'OpenWrt 分支'
+        required: false
+        default: 'main'
+      target_profile:
+        description: '目标设备配置'
+        required: false
+        default: 'generic'
+      compile_threads:
+        description: '编译线程数'
+        required: false
+        default: '4'
+      config_url:
+        description: '远程配置文件 URL (可选)'
+        required: false
+        default: ''
+      config_server:
+        description: '配置服务器地址 (可选)'
+        required: false
+        default: ''
+
+env:
+  OPENWRT_ROOT: /home/runner/work/openwrt
+  COMPILE_CACHE: /home/runner/work/cc-cache
+  REMOTE_CONFIG_DIR: /home/runner/remote-configs
+
+jobs:
+  # ============ 第一步：准备编译环境 ============
+  prepare-environment:
+    runs-on: ubuntu-latest
+    outputs:
+      build-id: ${{ steps.build-info.outputs.id }}
+      build-time: ${{ steps.build-info.outputs.time }}
+    
+    steps:
+      - name: ✅ 系统信息
+        id: build-info
+        run: |
+          BUILD_ID=$(date '+%Y%m%d-%H%M%S')
+          BUILD_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+          echo "id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "time=$BUILD_TIME" >> $GITHUB_OUTPUT
+          
+          echo "=== 系统信息 ==="
+          echo "CPU 核心数: $(nproc)"
+          echo "内存大小: $(free -h | grep Mem | awk '{print $2}')"
+          echo "磁盘空间: $(df -h / | tail -1 | awk '{print $4}')"
+          echo "构建ID: $BUILD_ID"
+          echo "构建时间: $BUILD_TIME"
+      
+      - name: 🔧 安装编译依赖
+        run: |
+          echo "📥 安装 OpenWrt 编译依赖..."
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            build-essential \
+            clang \
+            flex \
+            bison \
+            g++ \
+            gawk \
+            gcc \
+            gettext \
+            git \
+            libncurses5-dev \
+            libssl-dev \
+            msmtp \
+            openssh-client \
+            patch \
+            rsync \
+            unzip \
+            xsltproc \
+            zlib1g-dev \
+            ca-certificates \
+            cron \
+            curl \
+            wget
+          
+          echo "✅ 依赖安装完成"
+          gcc --version
+          git --version
+
+  # ============ 第二步：检出源代码 ============
+  checkout-source:
+    needs: prepare-environment
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 检出 OpenWrt 源代码
+        run: |
+          echo "克隆 OpenWrt 仓库..."
+          git clone --depth 1 \
+            --branch ${{ github.event.inputs.openwrt_branch }} \
+            ${{ github.event.inputs.openwrt_repo }} \
+            ${{ env.OPENWRT_ROOT }}
+          
+          cd ${{ env.OPENWRT_ROOT }}
+          echo "当前分支: $(git branch --show-current)"
+          echo "最新提交: $(git log -1 --oneline)"
+      
+      - name: 📦 更新 feeds
+        run: |
+          cd ${{ env.OPENWRT_ROOT }}
+          echo "更新 feeds..."
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          
+          echo "✅ Feeds 更新完成"
+          echo "安装的包数量: $(ls feeds/*/pkgs 2>/dev/null | wc -l)"
+      
+      - name: 💾 缓存源代码
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OPENWRT_ROOT }}
+          key: openwrt-source-${{ github.event.inputs.openwrt_branch }}-${{ needs.prepare-environment.outputs.build-id }}
+          restore-keys: |
+            openwrt-source-${{ github.event.inputs.openwrt_branch }}-
+
+  # ============ 第三步：生成配置文件 ============
+  generate-config:
+    needs: [prepare-environment, checkout-source]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 💾 恢复源代码
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OPENWRT_ROOT }}
+          key: openwrt-source-${{ github.event.inputs.openwrt_branch }}-${{ needs.prepare-environment.outputs.build-id }}
+      
+      - name: 📡 从远程服务器下载配置
+        run: |
+          mkdir -p ${{ env.REMOTE_CONFIG_DIR }}
+          
+          # 检查是否提供了配置 URL
+          if [ -n "${{ github.event.inputs.config_url }}" ]; then
+            echo "📥 从远程 URL 下载配置..."
+            echo "配置 URL: ${{ github.event.inputs.config_url }}"
+            
+            if curl -f -L "${{ github.event.inputs.config_url }}" -o ${{ env.REMOTE_CONFIG_DIR }}/.config ; then
+              echo "✅ 远程配置下载成功"
+            else
+              echo "⚠️ 远程配置下载失败，将使用默认配置"
+              touch ${{ env.REMOTE_CONFIG_DIR }}/.config.failed
+            fi
+          fi
+          
+          # 检查是否提供了配置服务器
+          if [ -n "${{ github.event.inputs.config_server }}" ]; then
+            echo "🔗 连接到配置服务器..."
+            echo "服务器: ${{ github.event.inputs.config_server }}"
+            
+            # 尝试从配置服务器下载配置
+            SERVER="${{ github.event.inputs.config_server }}"
+            
+            # 尝试多个常见的配置路径
+            for path in "/.config" "/openwrt/.config" "/configs/.config" "/default.config"; do
+              echo "尝试: $SERVER$path"
+              if curl -f -L "$SERVER$path" -o ${{ env.REMOTE_CONFIG_DIR }}/.config.tmp 2>/dev/null; then
+                echo "✅ 配置服务器连接成功，已下载配置"
+                mv ${{ env.REMOTE_CONFIG_DIR }}/.config.tmp ${{ env.REMOTE_CONFIG_DIR }}/.config
+                break
+              fi
+            done
+            
+            if [ ! -f ${{ env.REMOTE_CONFIG_DIR }}/.config ]; then
+              echo "⚠️ 无法从配置服务器获取配置"
+            fi
+          fi
+      
+      - name: ⚙️ 生成编译配置
+        run: |
+          cd ${{ env.OPENWRT_ROOT }}
+          echo "生成编译配置..."
+          make defconfig
+          
+          # 检查是否存在远程配置
+          if [ -f ${{ env.REMOTE_CONFIG_DIR }}/.config ] && [ ! -f ${{ env.REMOTE_CONFIG_DIR }}/.config.failed ]; then
+            echo "📥 合并远程配置..."
+            # 备份原始配置
+            cp .config .config.default
+            # 合并远程配置（远程配置优先）
+            cat ${{ env.REMOTE_CONFIG_DIR }}/.config >> .config
+            echo "✅ 已应用远程配置"
+          else
+            echo "📝 使用本地默认配置..."
+            
+            # 常用配置选项示例
+            cat >> .config << 'EOF'
+          # 编译配置
+          CONFIG_DEVEL=y
+          CONFIG_TARGET_ROOTFS_EXT4=y
+          CONFIG_TARGET_ROOTFS_SQUASHFS=y
+          CONFIG_TARGET_IMAGES_GZIP=y
+          CONFIG_TARGET_IMAGES_PAD=y
+          
+          # 选择目标
+          # 例如：x86_64 需要以下配置
+          CONFIG_TARGET_ARCH_PACKAGES="x86_64"
+          CONFIG_TARGET_x86=y
+          CONFIG_TARGET_x86_64=y
+          
+          # 包含常用工具
+          CONFIG_PACKAGE_curl=y
+          CONFIG_PACKAGE_wget=y
+          CONFIG_PACKAGE_git=y
+          CONFIG_PACKAGE_openssh-client=y
+          CONFIG_PACKAGE_openssh-server=y
+          CONFIG_PACKAGE_nano=y
+          CONFIG_PACKAGE_vim=y
+          EOF
+          fi
+          
+          # 验证和优化配置
+          echo "🔍 验证配置内容..."
+          make defconfig
+          
+          # 检查配置是否有重复
+          echo "🧹 清理重复配置..."
+          sort .config | uniq > .config.tmp
+          mv .config.tmp .config
+          
+          echo "✅ 配置生成和验证完成"
+      
+      - name: 🔧 安装调试工具
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y vim nano htop
+          echo "✅ 调试工具安装完成"
+      
+      - name: 🌐 启动 tmate 远程会话
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 60
+        with:
+          detached: false
+          limit-access-to-actor: false
+        env:
+          OPENWRT_ROOT: ${{ env.OPENWRT_ROOT }}
+      
+      - name: 📋 验证配置
+        run: |
+          cd ${{ env.OPENWRT_ROOT }}
+          echo "=== 配置验证 ==="
+          echo "配置文件存在: $([ -f .config ] && echo '✅ 是' || echo '❌ 否')"
+          echo "配置行数: $(wc -l < .config 2>/dev/null || echo '0')"
+          echo ""
+          echo "配置内容预览:"
+          head -20 .config
+          echo ""
+          echo "=== 配置文件大小 ==="
+          ls -lh .config
+          
+          # 验证配置
+          if make oldconfig < /dev/null > /dev/null 2>&1; then
+            echo "✅ 配置验证通过"
+          else
+            echo "⚠️ 配置验证警告，但可以继续编译"
+          fi
+      
+      - name: 📋 显示配置信息
+        run: |
+          cd ${{ env.OPENWRT_ROOT }}
+          echo "=== 编译配置 ==="
+          echo "总配置数: $(wc -l < .config)"
+          echo ""
+          echo "前30行配置:"
+          head -30 .config
+          echo ""
+          echo "=== 配置统计 ==="
+          echo "启用项 (=y): $(grep -c '=y' .config)"
+          echo "禁用项 (=n): $(grep -c '=n' .config)"
+          echo "模块项 (=m): $(grep -c '=m' .config)"
+          echo "字符串项 (=\\"): $(grep -c '=.*\\"' .config)"
+          
+          # 检查是否有远程配置被应用
+          if [ -f .config.default ]; then
+            echo ""
+            echo "🔀 配置差异:"
+            echo "默认配置行数: $(wc -l < .config.default)"
+            echo "当前配置行数: $(wc -l < .config)"
+            diff_count=$(diff .config.default .config | wc -l)
+            echo "差异行数: $diff_count"
+          fi
+      
+      - name: � 上传配置文件用于调试
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-config-${{ needs.prepare-environment.outputs.build-id }}
+          path: |
+            ${{ env.OPENWRT_ROOT }}/.config
+            ${{ env.OPENWRT_ROOT }}/.config.default
+            ${{ env.REMOTE_CONFIG_DIR }}/.config
+          retention-days: 7
+      
+      - name: �💾 缓存配置
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OPENWRT_ROOT }}/.config
+          key: openwrt-config-${{ github.event.inputs.openwrt_branch }}-${{ hashFiles('.config') }}
+
+  # ============ 第四步：编译镜像 ============
+  compile:
+    needs: [prepare-environment, generate-config]
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6小时超时
+    
+    steps:
+      - name: 💾 恢复源代码
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OPENWRT_ROOT }}
+          key: openwrt-source-${{ github.event.inputs.openwrt_branch }}-${{ needs.prepare-environment.outputs.build-id }}
+      
+      - name: 💾 恢复编译配置
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OPENWRT_ROOT }}/.config
+          key: openwrt-config-${{ github.event.inputs.openwrt_branch }}-${{ hashFiles('.config') }}
+      
+      - name: 💾 恢复 ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.COMPILE_CACHE }}
+          key: openwrt-ccache-${{ github.event.inputs.openwrt_branch }}-${{ needs.prepare-environment.outputs.build-id }}
+          restore-keys: |
+            openwrt-ccache-${{ github.event.inputs.openwrt_branch }}-
+      
+      - name: 🔨 编译 OpenWrt
+        run: |
+          cd ${{ env.OPENWRT_ROOT }}
+          
+          # 设置 ccache
+          export PATH=/usr/lib/ccache:$PATH
+          export ccache_dir=${{ env.COMPILE_CACHE }}
+          
+          echo "🔨 开始编译 OpenWrt..."
+          echo "编译线程数: ${{ github.event.inputs.compile_threads }}"
+          
+          # 开始编译
+          time make -j${{ github.event.inputs.compile_threads }} V=sc 2>&1 | tee compile.log
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ 编译成功！"
+          else
+            echo "❌ 编译失败！"
+            echo "查看最后50行日志："
+            tail -50 compile.log
+            exit 1
+          fi
+      
+      - name: 📊 编译统计
+        if: always()
+        run: |
+          cd ${{ env.OPENWRT_ROOT }}
+          
+          echo "=== 编译统计 ==="
+          if [ -f compile.log ]; then
+            echo "编译日志大小: $(du -h compile.log | cut -f1)"
+            echo "错误行数: $(grep -i error compile.log | wc -l)"
+            echo "警告行数: $(grep -i warning compile.log | wc -l)"
+          fi
+          
+          if [ -d bin/targets ]; then
+            echo ""
+            echo "生成的镜像文件:"
+            find bin/targets -type f \( -name "*.bin" -o -name "*.img" -o -name "*.tar.gz" \) -exec ls -lh {} \; | awk '{print $9, "(" $5 ")"}'
+            echo ""
+            echo "镜像总大小: $(du -sh bin/targets | cut -f1)"
+          fi
+
+  # ============ 第五步：上传编译产物 ============
+  upload-artifacts:
+    needs: [prepare-environment, compile]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 💾 恢复编译结果
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OPENWRT_ROOT }}/bin
+          key: openwrt-bin-${{ github.event.inputs.openwrt_branch }}-${{ needs.prepare-environment.outputs.build-id }}
+      
+      - name: 📤 生成镜像清单
+        run: |
+          mkdir -p /tmp/artifacts
+          
+          cd ${{ env.OPENWRT_ROOT }}
+          
+          cat > /tmp/artifacts/BUILD_INFO.md << 'EOF'
+          # 🔨 OpenWrt 编译信息
+          
+          ## 编译详情
+          - **构建ID**: ${{ needs.prepare-environment.outputs.build-id }}
+          - **编译时间**: ${{ needs.prepare-environment.outputs.build-time }}
+          - **源代码分支**: ${{ github.event.inputs.openwrt_branch }}
+          - **编译线程**: ${{ github.event.inputs.compile_threads }}
+          
+          ## 镜像文件
+          EOF
+          
+          # 列出所有生成的镜像
+          if [ -d bin/targets ]; then
+            find bin/targets -type f | while read file; do
+              filename=$(basename "$file")
+              filesize=$(du -h "$file" | cut -f1)
+              echo "- **$filename** ($filesize)" >> /tmp/artifacts/BUILD_INFO.md
+            done
+          fi
+          
+          cat >> /tmp/artifacts/BUILD_INFO.md << 'EOF'
+          
+          ## 系统要求
+          - OpenWrt 支持多种架构和设备
+          - 刷写前请备份原固件
+          - 确保电源稳定，避免刷写过程中断电
+          
+          ## 快速开始
+          1. 下载对应设备的镜像文件
+          2. 进入设备管理界面
+          3. 选择固件升级
+          4. 选择下载的镜像文件
+          5. 等待刷写完成
+          
+          ## 支持
+          - OpenWrt 官网: https://openwrt.org
+          - 文档: https://openwrt.org/docs
+          EOF
+          
+          cat /tmp/artifacts/BUILD_INFO.md
+      
+      - name: 📤 上传镜像文件
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-images-${{ needs.prepare-environment.outputs.build-id }}
+          path: ${{ env.OPENWRT_ROOT }}/bin/targets/**/*
+          retention-days: 30
+      
+      - name: 📤 上传编译日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compile-logs-${{ needs.prepare-environment.outputs.build-id }}
+          path: ${{ env.OPENWRT_ROOT }}/compile.log
+          retention-days: 7
+      
+      - name: 📤 上传编译信息
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-info-${{ needs.prepare-environment.outputs.build-id }}
+          path: /tmp/artifacts/
+
+  # ============ 第六步：生成 Release ============
+  create-release:
+    needs: [prepare-environment, upload-artifacts]
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 下载镜像文件
+        uses: actions/download-artifact@v4
+        with:
+          name: openwrt-images-${{ needs.prepare-environment.outputs.build-id }}
+          path: ./images
+      
+      - name: 📥 下载编译信息
+        uses: actions/download-artifact@v4
+        with:
+          name: build-info-${{ needs.prepare-environment.outputs.build-id }}
+          path: ./info
+      
+      - name: 🎉 创建 Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: openwrt-${{ needs.prepare-environment.outputs.build-id }}
+          name: 🔨 OpenWrt Release ${{ needs.prepare-environment.outputs.build-id }}
+          body_path: ./info/BUILD_INFO.md
+          files: |
+            images/**/*
+          draft: false
+          prerelease: false
+
+  # ============ 最后步骤：完成报告 ============
+  completion-report:
+    needs: [prepare-environment, compile, upload-artifacts]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📊 编译完成报告
+        run: |
+          cat > build-report.md << 'EOF'
+          # 🎉 OpenWrt 编译报告
+          
+          ## 📋 基本信息
+          - **构建ID**: ${{ needs.prepare-environment.outputs.build-id }}
+          - **编译时间**: ${{ needs.prepare-environment.outputs.build-time }}
+          - **分支**: ${{ github.event.inputs.openwrt_branch }}
+          - **触发者**: ${{ github.actor }}
+          
+          ## ✅ 构建状态
+          - 准备环境: ${{ needs.prepare-environment.result }}
+          - 源代码检出: success
+          - 编译: ${{ needs.compile.result }}
+          - 上传: ${{ needs.upload-artifacts.result }}
+          
+          ## 📦 产物
+          - 镜像文件: 已上传
+          - 编译日志: 已上传（7天保留）
+          - Release: ${{ needs.upload-artifacts.result == 'success' && '已创建' || '待手动创建' }}
+          
+          ## 🔗 相关链接
+          - OpenWrt 官网: https://openwrt.org
+          - 本次构建: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          - 下载地址: ${{ github.server_url }}/${{ github.repository }}/releases/tag/openwrt-${{ needs.prepare-environment.outputs.build-id }}
+          
+          ---
+          ✨ 编译工作流完成！
+          EOF
+          
+          cat build-report.md
+      
+      - name: 📤 上传编译报告
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-report
+          path: build-report.md
+      
+      - name: 💬 输出摘要
+        run: |
+          echo "╔══════════════════════════════════════╗"
+          echo "║   🎊 OpenWrt 编译工作流完成 🎊       ║"
+          echo "╠══════════════════════════════════════╣"
+          echo "║ 构建ID: ${{ needs.prepare-environment.outputs.build-id }} ║"
+          echo "║ 分支: ${{ github.event.inputs.openwrt_branch }} ║"
+          echo "║ 状态: ${{ needs.compile.result == 'success' && '✅成功' || '❌失败' }} ║"
+          echo "║ 产物: 📦已上传到 Artifacts ║"
+          echo "╚══════════════════════════════════════╝"
