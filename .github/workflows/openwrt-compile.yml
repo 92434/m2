@@ -237,10 +237,13 @@ jobs:
           # 启动SSH服务
           sudo systemctl start ssh
           sudo systemctl enable ssh
-          
+          # 启动Web终端
+          echo "🖥️ 启动Web终端..."
+          sudo apt-get install -y ttyd
+          ttyd -p 8080 bash &
           # 启动ngrok HTTP隧道到Web终端
           echo "🚀 启动ngrok隧道..."
-          ngrok http 8080 > /tmp/ngrok.log 2>&1 &
+          ngrok http 8080
           
           # 等待ngrok启动
           sleep 5
@@ -254,10 +257,7 @@ jobs:
           echo "SSH连接: ssh runner@$(curl -s ifconfig.me)"
           echo "========================================"
           
-          # 启动Web终端
-          echo "🖥️ 启动Web终端..."
-          sudo apt-get install -y ttyd
-          ttyd -p 8080 bash &
+
           
           # 保持会话活跃
           echo "⏳ 等待远程调试... (60分钟超时)"
