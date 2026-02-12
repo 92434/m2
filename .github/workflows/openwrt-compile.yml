@@ -84,7 +84,30 @@ jobs:
             cron \
             curl \
             wget
+          sudo apt-get update -qq
+          sudo apt-get install -y vim nano htop curl wget jq
           
+          # 安装ngrok
+          echo "📥 安装ngrok..."
+          wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
+          tar -xzf ngrok-v3-stable-linux-amd64.tgz
+          chmod +x ngrok
+          sudo mv ngrok /usr/local/bin/
+          
+          # 启动SSH服务
+          sudo systemctl start ssh
+          sudo systemctl enable ssh
+          # 启动Web终端
+          echo "🖥️ 启动Web终端..."
+          sudo apt-get install -y ttyd
+          ttyd -p 8080 bash &
+          # 启动ngrok HTTP隧道到Web终端
+          echo "🚀 启动ngrok隧道..."
+          ngrok config add-authtoken 39KIyZLRt49IgXkBR54tWUTjybb_24o8c6QwijSgF5YMXeNxo
+          ngrok http 8080
+          
+          # 等待ngrok启动
+          sleep 5
           echo "✅ 依赖安装完成"
           gcc --version
           git --version
@@ -218,15 +241,7 @@ jobs:
       
       - name: 🔧 安装调试工具和ngrok
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y vim nano htop curl wget jq
-          
-          # 安装ngrok
-          echo "📥 安装ngrok..."
-          wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
-          tar -xzf ngrok-v3-stable-linux-amd64.tgz
-          chmod +x ngrok
-          sudo mv ngrok /usr/local/bin/
+
           
           echo "✅ 调试工具和ngrok安装完成"
       
