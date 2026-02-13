@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-⚡ 数据要塞快速启动脚本
+数据要塞快速启动脚本
 来自夜的命名术·壹的一键体验
 """
 
@@ -17,8 +17,8 @@ def print_banner():
     banner = """
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
-║                   🏰 夜幕要塞 🏰                          ║
-║            来自夜的命名术·壹的数字堡垒                      ║
+║                     夜幕要塞                                ║
+║              来自夜的命名术·壹的数字堡垒                    ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
     """
@@ -27,14 +27,14 @@ def print_banner():
 
 def check_prerequisites():
     """检查前提条件"""
-    print("🔍 检查系统环境...")
+    print("检查系统环境...")
 
     # 检查Python版本
     if sys.version_info < (3, 8):
-        print("❌ Python版本过低，请升级到3.8以上")
+        print("Python版本过低，请升级到3.8以上")
         return False
 
-    print(f"✅ Python版本: {sys.version.split()[0]}")
+    print(f"Python版本: {sys.version.split()[0]}")
 
     # 检查必要文件
     required_files = [
@@ -49,16 +49,16 @@ def check_prerequisites():
             missing_files.append(file)
 
     if missing_files:
-        print(f"❌ 缺少必要文件: {', '.join(missing_files)}")
+        print(f"缺少必要文件: {', '.join(missing_files)}")
         return False
 
-    print("✅ 所有文件检查通过")
+    print("所有文件检查通过")
     return True
 
 
 def setup_virtual_environment():
     """设置虚拟环境"""
-    print("🐍 设置Python虚拟环境...")
+    print("设置Python虚拟环境...")
 
     venv_path = Path("fortress_venv")
 
@@ -67,19 +67,19 @@ def setup_virtual_environment():
             subprocess.run(
                 [sys.executable, "-m", "venv", "fortress_venv"], check=True
             )
-            print("✅ 虚拟环境创建成功")
+            print("虚拟环境创建成功")
         except subprocess.CalledProcessError:
-            print("❌ 虚拟环境创建失败")
+            print("虚拟环境创建失败")
             return False
     else:
-        print("✅ 虚拟环境已存在")
+        print("虚拟环境已存在")
 
     return True
 
 
 def install_dependencies():
     """安装依赖"""
-    print("📦 安装项目依赖...")
+    print("安装项目依赖...")
 
     try:
         if os.name == "nt":  # Windows
@@ -92,16 +92,16 @@ def install_dependencies():
             check=True,
             capture_output=True,
         )
-        print("✅ 依赖安装完成")
+        print("依赖安装完成")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ 依赖安装失败: {e}")
+        print(f"依赖安装失败: {e}")
         return False
 
 
 def start_fortress_demo():
     """启动要塞演示"""
-    print("🚀 启动数据要塞演示...")
+    print("启动数据要塞演示...")
 
     try:
         # 启动守护进程
@@ -117,14 +117,14 @@ def start_fortress_demo():
             stderr=subprocess.PIPE,
         )
 
-        print("✅ 守护进程已启动")
+        print("守护进程已启动")
         print(f"进程ID: {process.pid}")
 
         # 等待几秒钟让系统初始化
         time.sleep(3)
 
         # 显示基本状态信息
-        print("\n📊 要塞状态:")
+        print("\n要塞状态:")
         print("  • 状态: OPERATIONAL")
         print("  • 模块: 4个核心模块在线")
         print("  • 安全: 防火墙已激活")
@@ -133,13 +133,13 @@ def start_fortress_demo():
         return process
 
     except Exception as e:
-        print(f"❌ 启动失败: {e}")
+        print(f"启动失败: {e}")
         return None
 
 
 def show_usage_instructions():
     """显示使用说明"""
-    print("\n📖 使用说明:")
+    print("\n使用说明:")
     print("=" * 50)
     print("1. 要塞守护进程已在后台运行")
     print("2. 使用以下命令管理要塞:")
@@ -171,17 +171,17 @@ def main():
     process = start_fortress_demo()
     if process:
         show_usage_instructions()
-        print(f"\n🌟 数据要塞正在运行中... (PID: {process.pid})")
+        print(f"\n数据要塞正在运行中... (PID: {process.pid})")
         print("按 Ctrl+C 停止演示")
 
         try:
             # 保持运行直到用户中断
             process.wait()
         except KeyboardInterrupt:
-            print("\n🛑 正在停止要塞系统...")
+            print("\n正在停止要塞系统...")
             process.terminate()
             process.wait()
-            print("✅ 要塞系统已安全关闭")
+            print("要塞系统已安全关闭")
 
 
 if __name__ == "__main__":

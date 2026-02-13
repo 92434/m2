@@ -5,6 +5,7 @@
 
 # 核心依赖
 PyYAML>=6.0
+types-PyYAML>=6.0.0  # PyYAML类型存根，用于mypy类型检查
 cryptography>=3.4.8
 psutil>=5.8.0
 

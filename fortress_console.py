@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🖥️ 数据要塞控制台
+数据要塞控制台
 夜的命名术·壹的指挥中心
 """
 
@@ -61,7 +61,7 @@ class FortressConsole:
             self.screen.addstr(i, 0, " " * width)
 
         # 绘制标题
-        title = "🏰 夜幕要塞控制中心 🏰"
+        title = "夜幕要塞控制中心"
         title_x = (width - len(title)) // 2
         self.screen.addstr(0, title_x, title, curses.color_pair(1) | curses.A_BOLD)
 
@@ -88,7 +88,7 @@ class FortressConsole:
 
         # 系统概览
         y_pos = 4
-        self.screen.addstr(y_pos, 2, "📊 系统概览", curses.color_pair(1) | curses.A_BOLD)
+        self.screen.addstr(y_pos, 2, "系统概览", curses.color_pair(1) | curses.A_BOLD)
         y_pos += 2
 
         stats = self.get_system_stats()
@@ -119,7 +119,7 @@ class FortressConsole:
 
         # 模块状态
         y_pos += 1
-        self.screen.addstr(y_pos, 2, "🔧 模块状态", curses.color_pair(1) | curses.A_BOLD)
+        self.screen.addstr(y_pos, 2, "模块状态", curses.color_pair(1) | curses.A_BOLD)
         y_pos += 2
 
         modules = self.get_module_status()
@@ -135,11 +135,11 @@ class FortressConsole:
         if self.alerts:
             y_pos += 1
             self.screen.addstr(
-                y_pos, 2, "🚨 最新警报", curses.color_pair(2) | curses.A_BOLD
+                y_pos, 2, "最新警报", curses.color_pair(2) | curses.A_BOLD
             )
             y_pos += 2
             for alert in self.alerts[-3:]:  # 显示最近3条警报
-                self.screen.addstr(y_pos, 4, f"⚠ {alert}", curses.color_pair(2))
+                self.screen.addstr(y_pos, 4, f"{alert}", curses.color_pair(2))
                 y_pos += 1
 
     def get_system_stats(self) -> Dict:
@@ -180,7 +180,7 @@ class FortressConsole:
 
         y_pos = 4
         self.screen.addstr(
-            y_pos, 2, "🔧 模块管理系统", curses.color_pair(1) | curses.A_BOLD
+            y_pos, 2, "模块管理系统", curses.color_pair(1) | curses.A_BOLD
         )
         y_pos += 2
 
