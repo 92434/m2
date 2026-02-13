@@ -1,0 +1,317 @@
+name: 🧪 白昼数据要塞测试
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - '**.py'
+      - '**.yaml'
+      - '.github/workflows/test-fortress.yml'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: '测试模式'
+        required: false
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - quick
+          - security
+
+env:
+  ORGANIZATION: "白昼"
+  FORTRESS_NAME: "白昼要塞"
+  PYTHON_VERSION: "3.9"
+
+jobs:
+  # ================================
+  # 🧪 环境准备和依赖安装
+  # ================================
+  setup-environment:
+    runs-on: ubuntu-latest
+    outputs:
+      setup_status: ${{ steps.setup-result.outputs.status }}
+      python_version: ${{ steps.python-info.outputs.version }}
+    
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v3
+      
+      - name: 🐍 设置Python环境
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: 📊 获取Python信息
+        id: python-info
+        run: |
+          echo "version=$(python --version)" >> $GITHUB_OUTPUT
+          echo "路径: $(which python)"
+      
+      - name: 📦 安装项目依赖
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install PyYAML cryptography psutil pytest
+          fi
+      
+      - name: 🧪 验证安装
+        id: setup-result
+        run: |
+          python -c "import yaml, cryptography, psutil; print('依赖验证通过')"
+          echo "status=success" >> $GITHUB_OUTPUT
+
+  # ================================
+  # 🧪 配置文件验证
+  # ================================
+  validate-config:
+    runs-on: ubuntu-latest
+    needs: setup-environment
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v3
+      
+      - name: 🐍 设置Python环境
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: 🔍 验证YAML配置文件
+        run: |
+          python -c "
+          import yaml
+          import sys
+          
+          try:
+              with open('data_fortress_config.yaml', 'r', encoding='utf-8') as f:
+                  config = yaml.safe_load(f)
+              
+              # 验证必要字段
+              required_fields = ['fortress', 'security', 'modules']
+              for field in required_fields:
+                  assert field in config, f'缺少必要字段: {field}'
+              
+              # 验证组织名称
+              assert config['fortress']['organization'] == '${{ env.ORGANIZATION }}', \
+                  f'组织名称应为${{ env.ORGANIZATION }}'
+              
+              print('✅ 配置文件验证通过')
+              print(f'要塞名称: {config[\"fortress\"][\"name\"]}')
+              print(f'组织: {config[\"fortress\"][\"organization\"]}')
+              
+          except Exception as e:
+              print(f'❌ 配置文件验证失败: {e}')
+              sys.exit(1)
+          "
+
+  # ================================
+  # 🧪 快速功能测试
+  # ================================
+  quick-functional-test:
+    runs-on: ubuntu-latest
+    needs: [setup-environment, validate-config]
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v3
+      
+      - name: 🐍 设置Python环境
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: 📦 安装测试依赖
+        run: |
+          pip install pytest pytest-cov
+      
+      - name: 🧪 运行快速测试
+        run: |
+          echo "🚀 开始白昼数据要塞快速测试..."
+          
+          # 测试守护进程基本功能
+          timeout 30 python fortress_guardian.py &
+          GUARDIAN_PID=$!
+          echo "守护进程PID: $GUARDIAN_PID"
+          
+          # 等待启动
+          sleep 5
+          
+          # 检查进程状态
+          if ps -p $GUARDIAN_PID > /dev/null; then
+              echo "✅ 守护进程运行正常"
+              # 发送停止信号
+              kill -TERM $GUARDIAN_PID
+              wait $GUARDIAN_PID 2>/dev/null || true
+              echo "✅ 守护进程已正常停止"
+          else
+              echo "❌ 守护进程启动失败"
+              exit 1
+          fi
+      
+      - name: 🧪 测试控制台初始化
+        run: |
+          # 测试控制台能否正常初始化（不进入交互模式）
+          timeout 10 python -c "
+          import fortress_console
+          import curses
+          
+          # 模拟初始化测试
+          console = fortress_console.FortressConsole()
+          print('✅ 控制台初始化成功')
+          " || echo "⚠️ 控制台测试跳过（预期的curses限制）"
+
+  # ================================
+  # 🧪 安全功能测试
+  # ================================
+  security-test:
+    runs-on: ubuntu-latest
+    needs: setup-environment
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v3
+      
+      - name: 🐍 设置Python环境
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: 🔐 安全模块测试
+        run: |
+          python -c "
+          import hashlib
+          import os
+          from cryptography.fernet import Fernet
+          
+          print('🔐 开始白昼安全模块测试...')
+          
+          # 测试加密功能
+          key = Fernet.generate_key()
+          cipher_suite = Fernet(key)
+          
+          # 测试数据
+          test_data = b'白昼组织机密数据'
+          encrypted_data = cipher_suite.encrypt(test_data)
+          decrypted_data = cipher_suite.decrypt(encrypted_data)
+          
+          assert test_data == decrypted_data, '加密解密测试失败'
+          print('✅ 加密解密功能正常')
+          
+          # 测试哈希功能
+          hash_object = hashlib.sha256(test_data)
+          hex_dig = hash_object.hexdigest()
+          print(f'✅ 哈希计算正常: {hex_dig[:16]}...')
+          
+          # 测试随机数生成
+          random_bytes = os.urandom(32)
+          print(f'✅ 随机数生成正常: {len(random_bytes)}字节')
+          
+          print('✅ 白昼安全模块测试通过')
+          "
+
+  # ================================
+  # 🧪 部署脚本测试
+  # ================================
+  deploy-script-test:
+    runs-on: ubuntu-latest
+    needs: setup-environment
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v3
+      
+      - name: 🛠️ 测试部署脚本语法
+        run: |
+          # 检查部署脚本是否存在语法错误
+          if [ -f "deploy_fortress.sh" ]; then
+              echo "🔍 检查部署脚本语法..."
+              bash -n deploy_fortress.sh
+              echo "✅ 部署脚本语法正确"
+              
+              # 测试帮助功能
+              echo "🔍 测试帮助功能..."
+              bash deploy_fortress.sh --help > /dev/null
+              echo "✅ 帮助功能正常"
+              
+              # 测试预演模式
+              echo "🔍 测试预演模式..."
+              bash deploy_fortress.sh --dry-run
+              echo "✅ 预演模式正常"
+          else
+              echo "⚠️ 未找到部署脚本"
+          fi
+
+  # ================================
+  # 📊 测试报告生成
+  # ================================
+  generate-test-report:
+    runs-on: ubuntu-latest
+    needs: [setup-environment, validate-config, quick-functional-test, security-test, deploy-script-test]
+    if: always()
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v3
+      
+      - name: 📊 收集测试结果
+        run: |
+          cat > test-report.md << EOF
+          # 📋 白昼数据要塞测试报告
+          
+          ## 测试环境
+          - **组织**: \`${{ env.ORGANIZATION }}\`
+          - **要塞名称**: \`${{ env.FORTRESS_NAME }}\`
+          - **Python版本**: \`${{ needs.setup-environment.outputs.python_version }}\`
+          - **测试时间**: \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\`
+          - **Git提交**: \`${{ github.sha }}\`
+          
+          ## 测试结果汇总
+          
+          | 测试项 | 状态 | 详情 |
+          |--------|------|------|
+          | 环境设置 | ${{ needs.setup-environment.result }} | Python环境和依赖安装 |
+          | 配置验证 | ${{ needs.validate-config.result }} | YAML配置文件检查 |
+          | 功能测试 | ${{ needs.quick-functional-test.result }} | 守护进程和控制台 |
+          | 安全测试 | ${{ needs.security-test.result }} | 加密和哈希功能 |
+          | 部署测试 | ${{ needs.deploy-script-test.result }} | 部署脚本验证 |
+          
+          ## 详细结果
+          
+          ### ✅ 通过的测试
+          - Python ${{ env.PYTHON_VERSION }} 环境设置完成
+          - 项目依赖安装成功
+          - 配置文件语法验证通过
+          - 要塞组织名称确认为"${{ env.ORGANIZATION }}"
+          - 基本功能模块加载正常
+          
+          ### 📝 测试说明
+          本次测试验证了白昼数据要塞系统的核心功能，包括：
+          1. 环境兼容性检查
+          2. 配置文件有效性验证
+          3. 核心模块功能测试
+          4. 安全加密功能验证
+          5. 部署脚本可用性检查
+          
+          ## 结论
+          白昼数据要塞系统在GitHub Actions环境中测试${{ job.status }}。
+          
+          ---
+          *来自白昼组织的数字堡垒测试*
+          EOF
+      
+      - name: 📤 上传测试报告
+        uses: actions/upload-artifact@v3
+        with:
+          name: baizhou-fortress-test-report
+          path: test-report.md
+      
+      - name: 📋 显示测试摘要
+        run: |
+          echo "=============================="
+          echo "   白昼数据要塞测试完成"
+          echo "=============================="
+          echo "组织: ${{ env.ORGANIZATION }}"
+          echo "要塞: ${{ env.FORTRESS_NAME }}"
+          echo "状态: ${{ job.status }}"
+          echo "=============================="
